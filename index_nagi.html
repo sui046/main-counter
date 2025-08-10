@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>凪</title>
+<meta name="theme-color" content="#222" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --accent: #4e8ef7;
+    --card: #191c22;
+    --danger: #e04444;
+    --ok: #1aa36f;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f8fa;
+      --fg: #202124;
+      --muted: #5f6368;
+      --accent: #1a73e8;
+      --card: #ffffff;
+      --danger: #d93025;
+      --ok: #188038;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Hiragino Kaku Gothic ProN, "Noto Sans JP", "Yu Gothic UI", "YuGothic", Meiryo, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .big { font-size: 44px; font-weight: 700; letter-spacing: .5px; }
+  .muted { color: var(--muted); }
+  button {
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .03s ease, opacity .2s ease;
+  }
+  button:active { transform: translateY(1px) scale(.99); }
+  .primary { background: var(--accent); color: #fff; }
+  .ok { background: var(--ok); color: #fff; }
+  .danger { background: var(--danger); color: #fff; }
+  .ghost { background: transparent; border: 1px solid var(--muted); color: var(--fg); }
+  .tiny { font-size: 12px; }
+  .progress { height: 10px; background: rgba(127,127,127,.2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+  .bar { height: 100%; width: 0%; background: var(--accent); transition: width .3s ease; }
+  .history { max-height: 42vh; overflow-y: auto; margin-top: 8px; }
+  .hist-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px dashed rgba(127,127,127,.25);
+  }
+  .hist-row:last-child { border-bottom: none; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: rgba(127,127,127,.2); }
+  .center { text-align: center; }
+  .spacer { height: 8px; }
+  .footer-note { text-align: center; opacity: .8; font-size: 12px; margin-top: 10px; }
+  input[type="number"] {
+    width: 100%; border-radius: 10px; border: 1px solid rgba(127,127,127,.35);
+    background: transparent; color: var(--fg); padding: 10px 12px; font-size: 16px;
+  }
+  textarea {
+    width: 100%; border-radius: 10px; border: 1px solid rgba(127,127,127,.35);
+    background: transparent; color: var(--fg); padding: 10px 12px; font-size: 16px;
+  }
+  .inline { display: flex; gap: 10px; align-items: center; }
+  /* toast */
+  .toast {
+    position: fixed; left: 50%; top: 18%; transform: translateX(-50%);
+    padding: 12px 16px; border-radius: 10px; background: rgba(0,0,0,.6); color: white;
+    font-weight: 700; font-size: 16px; opacity: 0; pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  /* quick mode */
+  .quick-wrap { display: none; height: 80vh; align-items: center; justify-content: center; font-size: 40px; font-weight: 800; opacity: .9; }
+  .quick-wrap.active { display: flex; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>凪</h1>
+    <button id="export" class="ghost">CSV出力</button>
+  </header>
+
+  <section class="card" id="todayCard">
+    <div class="row">
+      <div>
+        <div class="muted tiny">きょう</div>
+        <div class="big" id="todayCount">0</div>
+      </div>
+      <div>
+        <div class="muted tiny">今月 合計</div>
+        <div class="big" id="monthTotal">0</div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="inline">
+      <button id="inc" class="primary">+1</button>
+      <button id="dec" class="ghost">-1</button>
+      <button id="undo" class="ghost">元に戻す</button>
+    </div>
+
+    <div style="margin-top: 10px;" class="inline">
+      <button id="resetToday" class="danger">今日をリセット</button>
+      <div style="flex:1"></div>
+      <label class="tiny muted">目標/日</label>
+      <input id="goal" type="number" min="0" step="1" placeholder="目標（任意）" />
+    </div>
+
+    <div class="progress"><div class="bar" id="progressBar"></div></div>
+    <div class="tiny muted" id="goalText" style="margin-top:6px;"></div>
+  </section>
+
+  <div class="spacer"></div>
+
+  <section class="card">
+    <div class="inline" style="justify-content: space-between;">
+      <div class="muted">直近の履歴</div>
+      <button id="clearAll" class="ghost tiny">すべて消去</button>
+    </div>
+    <div class="history" id="history"></div>
+  </section>
+
+  <section class="card" style="margin-top:8px;">
+    <div class="muted tiny">今日のメモ（任意）</div>
+    <textarea id="note" rows="3" placeholder="例：インスタを無意識で2回開いた。夜は見なかった。"></textarea>
+  </section>
+
+  <div class="quick-wrap" id="quick">＋1</div>
+
+  <p class="footer-note">データは端末内（localStorage）に保存されます。オフラインでも使えます。</p>
+  <div class="toast" id="toast">＋1</div>
+
+<script>
+(function(){
+  const LOGKEY  = "ayu_counter_log_v2";
+  const GOALKEY = "ayu_counter_goal_v1";
+  const UNDOKEY = "ayu_counter_undo_v1";
+  const NOTEKEY = "ayu_counter_note_v1";
+  const LASTKEY = "ayu_counter_last_date_v1";
+
+  const $ = (id)=>document.getElementById(id);
+
+  function todayStr(){
+    // ローカル日付ベース（端末のタイムゾーンでOK）
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = ("0"+(now.getMonth()+1)).slice(-2);
+    const d = ("0"+now.getDate()).slice(-2);
+    return `${y}-${m}-${d}`;
+  }
+
+  function loadLog(){ try { return JSON.parse(localStorage.getItem(LOGKEY)) || {}; } catch(e){ return {}; } }
+  function saveLog(log){ localStorage.setItem(LOGKEY, JSON.stringify(log)); }
+
+  function loadGoal(){ const v = localStorage.getItem(GOALKEY); return v ? parseInt(v,10) : 0; }
+  function saveGoal(n){ localStorage.setItem(GOALKEY, String(Math.max(0, n|0))); }
+
+  function pushUndo(action, date, delta){
+    const stack = JSON.parse(localStorage.getItem(UNDOKEY) || "[]");
+    stack.push({action, date, delta, ts: Date.now()});
+    localStorage.setItem(UNDOKEY, JSON.stringify(stack.slice(-50)));
+  }
+  function popUndo(){
+    const stack = JSON.parse(localStorage.getItem(UNDOKEY) || "[]");
+    const x = stack.pop();
+    localStorage.setItem(UNDOKEY, JSON.stringify(stack));
+    return x;
+  }
+
+  function getMonthTotal(log, d){
+    const dt = d ? new Date(d) : new Date();
+    const y = dt.getFullYear();
+    const m = dt.getMonth();
+    let sum = 0;
+    for(const k in log){
+      const kd = new Date(k);
+      if(kd.getFullYear()===y && kd.getMonth()===m){ sum += (log[k]|0); }
+    }
+    return sum;
+  }
+
+  function weekday(dstr){
+    const d = new Date(dstr + "T00:00:00");
+    return ["日","月","火","水","木","金","土"][d.getDay()] + "曜";
+  }
+
+  function loadNote(date){
+    const bag = JSON.parse(localStorage.getItem(NOTEKEY) || "{}");
+    return bag[date] || "";
+  }
+  function saveNote(date, text){
+    const bag = JSON.parse(localStorage.getItem(NOTEKEY) || "{}");
+    bag[date] = text || "";
+    localStorage.setItem(NOTEKEY, JSON.stringify(bag));
+  }
+
+  function showToast(msg){
+    const t = $("toast");
+    t.textContent = msg || "＋1";
+    t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 800);
+  }
+
+  function vibrate(ms){
+    if(navigator && "vibrate" in navigator){ navigator.vibrate(ms); }
+  }
+
+  function bump(date, delta){
+    const log = loadLog();
+    const cur = log[date] | 0;
+    const next = Math.max(0, cur + delta);
+    log[date] = next;
+    saveLog(log);
+  }
+
+  function ensureTodayExists(){
+    const log = loadLog();
+    const d = todayStr();
+    if(!(d in log)){ log[d] = 0; saveLog(log); }
+  }
+
+  function renderHistory(){
+    const log = loadLog();
+    const entries = Object.entries(log).sort((a,b)=> a[0] < b[0] ? 1 : -1);
+    const recent = entries.slice(0, 30);
+    const box = $("history");
+    box.innerHTML = "";
+    if(recent.length===0){
+      const div = document.createElement("div");
+      div.className = "center muted tiny";
+      div.textContent = "まだ記録がありません";
+      box.appendChild(div);
+      return;
+    }
+    for(const [date, count] of recent){
+      const row = document.createElement("div");
+      row.className = "hist-row";
+      const left = document.createElement("div");
+      left.innerHTML = `<div><strong>${date}</strong></div><div class="muted tiny">${weekday(date)}</div>`;
+      const right = document.createElement("div");
+      right.innerHTML = `<span class="pill">合計 ${count}</span>`;
+      row.appendChild(left); row.appendChild(right);
+      box.appendChild(row);
+    }
+  }
+
+  function updateUI(){
+    const log = loadLog();
+    const d = todayStr();
+    $("todayCount").textContent = log[d] | 0;
+    $("monthTotal").textContent = getMonthTotal(log);
+    $("note").value = loadNote(d);
+
+    const goal = loadGoal();
+    $("goal").value = goal || "";
+    const todayCount = log[d] | 0;
+    const pct = goal ? Math.min(100, (todayCount / goal) * 100) : 0;
+    $("progressBar").style.width = goal ? pct + "%" : "0%";
+    $("goalText").textContent = goal ? `今日の目標 ${goal} に対して ${todayCount}` : "目標未設定";
+
+    renderHistory();
+  }
+
+  function exportCSV(){
+    const log = loadLog();
+    const notes = JSON.parse(localStorage.getItem(NOTEKEY) || "{}");
+    const rows = [["date","count","note"]];
+    const entries = Object.entries(log).sort((a,b)=> a[0] < b[0] ? -1 : 1);
+    for(const [d,c] of entries){
+      const n = notes[d] ? String(notes[d]).replaceAll('"','""') : "";
+      rows.push([d, String(c|0), n]);
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], {type: "text/csv"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "ayu_counter.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function checkDateChange(){
+    const last = localStorage.getItem(LASTKEY);
+    const nowD = todayStr();
+    if(last && last !== nowD){
+      // 新しい日へ。前日のメモ促し。
+      const prev = last;
+      const log = loadLog();
+      if(!(nowD in log)){ log[nowD] = 0; saveLog(log); }
+      const prevCount = (log[prev] | 0);
+      if(!loadNote(prev)){
+        const want = confirm(`${prev} は ${prevCount} 回。メモを残す？`);
+        if(want){
+          const txt = prompt("短いメモ（任意）", "");
+          if(txt !== null){ saveNote(prev, txt); }
+        }
+      }
+      updateUI();
+    }
+    localStorage.setItem(LASTKEY, nowD);
+  }
+
+  function handleHash(){
+    const h = (location.hash||"").toLowerCase();
+    if(h.includes("inc")){
+      ensureTodayExists();
+      const d = todayStr();
+      bump(d, +1);
+      updateUI();
+      $("quick").classList.add("active");
+      showToast("＋1");
+      vibrate(10);
+    }
+  }
+
+  // --- Event handlers
+  $("inc").addEventListener("click", ()=>{
+    const d = todayStr();
+    bump(d, +1);
+    pushUndo("inc", d, +1);
+    updateUI(); showToast("＋1"); vibrate(10);
+  });
+  $("dec").addEventListener("click", ()=>{
+    const d = todayStr();
+    bump(d, -1);
+    pushUndo("dec", d, -1);
+    updateUI(); showToast("−1"); vibrate(5);
+  });
+  $("resetToday").addEventListener("click", ()=>{
+    const d = todayStr();
+    const log = loadLog();
+    const prev = log[d] | 0;
+    if(prev === 0) return;
+    if(confirm("今日のカウントを0にします。よろしいですか？")){
+      log[d] = 0; saveLog(log);
+      pushUndo("reset", d, -prev);
+      updateUI(); vibrate(20);
+    }
+  });
+  $("undo").addEventListener("click", ()=>{
+    const x = popUndo();
+    if(!x){ alert("元に戻す履歴がありません"); return; }
+    const log = loadLog();
+    log[x.date] = Math.max(0, (log[x.date]|0) - x.delta); // 逆操作
+    saveLog(log); updateUI(); vibrate(12);
+  });
+  $("goal").addEventListener("change", (e)=>{
+    const n = parseInt(e.target.value, 10);
+    if(!isNaN(n) && n >= 0){ saveGoal(n); updateUI(); }
+  });
+  $("export").addEventListener("click", exportCSV);
+  $("clearAll").addEventListener("click", ()=>{
+    if(confirm("全データを削除します。よろしいですか？")){
+      localStorage.removeItem(LOGKEY);
+      localStorage.removeItem(UNDOKEY);
+      localStorage.removeItem(NOTEKEY);
+      updateUI(); vibrate(30);
+    }
+  });
+  $("note").addEventListener("input", (e)=>{ saveNote(todayStr(), e.target.value); });
+
+  // --- Init
+  ensureTodayExists();
+  updateUI();
+  checkDateChange();
+  handleHash();
+  setInterval(checkDateChange, 60*1000); // 1分おきに日付変化チェック
+})();
+</script>
+</body>
+</html>
